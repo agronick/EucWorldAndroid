@@ -583,4 +583,20 @@
   <string name="tour_finish_dialog_title">Finish tour tracking?</string>
   <string name="tour_finish_dialog_text">Are you sure you want to finish tour tracking?</string>
   <string name="lang_nl">Nederlands (Dutch)</string>
+  <string name="custom_audio_alarms_title">Custom Audio Alarm</string>
+  <string name="custom_audio_alarms_summary">Use sound files on your device a an alarm.</string>
+  <string name="select_file">Select a file</string>
+  <string name="select_file_description">File will play continuously until alarm condition ends</string>
+  <string name="alarm_1_file" translatable="false">alarm_1_file</string>
+  <string name="alarm_2_file" translatable="false">alarm_2_file</string>
+  <string name="alarm_3_file" translatable="false">alarm_3_file</string>
+  <string name="alarm_1_file_path" translatable="false">alarm_1_file_path</string>
+  <string name="alarm_2_file_path" translatable="false">alarm_2_file_path</string>
+  <string name="alarm_3_file_path" translatable="false">alarm_3_file_path</string>
+  <string name="alarm_1_file_title" translatable="false">alarm_1_file_title</string>
+  <string name="alarm_2_file_title" translatable="false">alarm_2_file_title</string>
+  <string name="alarm_3_file_title" translatable="false">alarm_3_file_title</string>
+  <string name="audio_alarm_1_enabled" translatable="false">audio_alarm_1_enabled</string>
+  <string name="audio_alarm_2_enabled" translatable="false">audio_alarm_2_enabled</string>
+  <string name="audio_alarm_3_enabled" translatable="false">audio_alarm_3_enabled</string>
 </resources>

@@ -22,6 +22,7 @@ import android.view.View;
 import net.lastowski.common.R;
 import net.lastowski.common.Value;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Timer;
@@ -1196,7 +1197,7 @@ public class DashboardGauge extends View {
                 else
                     paint.setColor(speed.isValid() ? textSpeedColor : textInactiveColor);
             }
-            canvas.drawText(String.valueOf((!vehicleMode && gpsSpeed != null) ? gpsSpeed.getAsInt() : speed.getAsInt()), rect.centerX(), rect.top + r(textSpeedY), paint);
+            canvas.drawText(new DecimalFormat("0.0").format(((!vehicleMode && gpsSpeed != null) ? gpsSpeed : speed).getAsSpeed()), rect.centerX(), rect.top + r(textSpeedY), paint);
             // Speed unit
             paint.setColor(speedAlarm ? alarmColor : textSpeedUnitColor);
             paint.setTextSize(r(textSpeedUnitHeight));

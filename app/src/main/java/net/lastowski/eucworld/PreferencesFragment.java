@@ -9,10 +9,13 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.Preference;
 import android.preference.PreferenceFragment;
+
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
@@ -38,6 +41,8 @@ import com.pavelsikun.seekbarpreference.SeekBarPreference;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Locale;
 
 import io.flic.lib.FlicAppNotInstalledException;
@@ -45,6 +50,9 @@ import io.flic.lib.FlicManager;
 import io.flic.lib.FlicManagerInitializedCallback;
 
 import static android.app.Activity.RESULT_OK;
+import static net.lastowski.eucworld.utils.Constants.REQUEST_ALARM_FILE_1;
+import static net.lastowski.eucworld.utils.Constants.REQUEST_ALARM_FILE_2;
+import static net.lastowski.eucworld.utils.Constants.REQUEST_ALARM_FILE_3;
 import static net.lastowski.eucworld.utils.Constants.REQUEST_GAUGE_CUSTOM_HORN;
 import static net.lastowski.eucworld.utils.Constants.REQUEST_FLIC_CUSTOM_HORN;
 import static net.lastowski.eucworld.utils.Constants.REQUEST_WATCH_CUSTOM_HORN;
@@ -88,6 +96,9 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
             case REQUEST_WATCH_CUSTOM_HORN:
             case REQUEST_GAUGE_CUSTOM_HORN:
             case REQUEST_FLIC_CUSTOM_HORN:
+            case REQUEST_ALARM_FILE_1:
+            case REQUEST_ALARM_FILE_2:
+            case REQUEST_ALARM_FILE_3:
                 if (resultCode == RESULT_OK) {
                     Uri uri = data.getData();
                     String path = getAudioPath(getActivity(), uri);
@@ -104,6 +115,18 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
                         case REQUEST_FLIC_CUSTOM_HORN:
                             SettingsUtil.setFlicCustomHornSound(getActivity(), path, title);
                             findPreference(getString(R.string.flic_custom_horn_sound)).setSummary(title);
+                            break;
+                        case REQUEST_ALARM_FILE_1:
+                            SettingsUtil.setAlarmCustomFile(getActivity(), REQUEST_ALARM_FILE_1, path, title);
+                            findPreference(getString(R.string.alarm_1_file)).setSummary(title);
+                            break;
+                        case REQUEST_ALARM_FILE_2:
+                            SettingsUtil.setAlarmCustomFile(getActivity(), REQUEST_ALARM_FILE_2, path, title);
+                            findPreference(getString(R.string.alarm_2_file)).setSummary(title);
+                            break;
+                        case REQUEST_ALARM_FILE_3:
+                            SettingsUtil.setAlarmCustomFile(getActivity(), REQUEST_ALARM_FILE_3, path, title);
+                            findPreference(getString(R.string.alarm_3_file)).setSummary(title);
                             break;
                     }
                 }
@@ -333,6 +356,8 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
                         if (alarm_temperature != null)
                             alarm_temperature.setImperial(SettingsUtil.isUseF(getActivity()));
 
+                        setupSoundPrefs();
+
                         setup_screen();
                         return true;
                     });
@@ -508,6 +533,11 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
                 break;
             case Alarms:
                 tb.setTitle(R.string.alarm_preferences_title);
+                for (SettingsUtil.AlarmFileConfig config : SettingsUtil.alarmFileConfigMap.values()) {
+                    Preference alarmPref = findPreference(getString(config.settingName));
+                    if (alarmPref != null)
+                        alarmPref.setEnabled(readExternalStorage);
+                }
                 break;
             case Speech:
                 tb.setTitle(R.string.speech_preferences_title);
@@ -640,9 +670,7 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
     }
 
     public boolean is_main_menu() {
-        if (currentScreen == SettingsScreen.Main)
-            return true;
-        else return false;
+        return (currentScreen == SettingsScreen.Main);
     }
 
     public boolean show_main_menu() {
@@ -698,6 +726,7 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
             requestParams.put("appid", Constants.appId(getActivity()));
             requestParams.put("email", email.getText());
             requestParams.put("password", password.getText());
+            requestParams.put("appversion", "2.0.2");
             HttpClient.post(Constants.getEucWorldUrl() + "/api/signin", requestParams, new JsonHttpResponseHandler() {
                 @Override
                 public void onSuccess(int statusCode, cz.msebera.android.httpclient.Header[] headers, JSONObject response) {
@@ -791,4 +820,22 @@ public class PreferencesFragment extends PreferenceFragment implements SharedPre
         return String.format("%s - %s\n%s", artist, title, name);
     }
 
+    private void setupSoundPrefs() {
+        setupSoundPref(R.string.alarm_1_file, REQUEST_ALARM_FILE_1);
+        setupSoundPref(R.string.alarm_2_file, REQUEST_ALARM_FILE_2);
+        setupSoundPref(R.string.alarm_3_file, REQUEST_ALARM_FILE_3);
+    }
+
+    private void setupSoundPref(int resource, int requestCode) {
+        Preference soundPref = findPreference(getString(resource));
+        if (soundPref == null) return;
+        soundPref.setOnPreferenceClickListener(preference -> {
+            selectSound(requestCode);
+            return true;
+        });
+        String title = SettingsUtil.alarmFileConfigMap.get(requestCode).getTitleName(getActivity());
+        if (title != null) {
+            soundPref.setSummary(title);
+        }
+    }
 }

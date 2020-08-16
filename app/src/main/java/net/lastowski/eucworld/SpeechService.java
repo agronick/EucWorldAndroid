@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.IBinder;
@@ -22,14 +23,18 @@ import net.lastowski.eucworld.utils.Constants;
 import net.lastowski.eucworld.utils.NotificationUtil;
 import net.lastowski.eucworld.utils.SettingsUtil;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
+
+import timber.log.Timber;
 
 public class SpeechService extends Service implements TextToSpeech.OnInitListener {
 
@@ -47,6 +52,14 @@ public class SpeechService extends Service implements TextToSpeech.OnInitListene
     private long ttsLastDisconnectedMessageTime = 0;
     private HashMap<String, String> ttsMap;
     private Timer timer;
+
+    private boolean isAlarm1CustomSound = false;
+    private boolean isAlarm2CustomSound = false;
+    private boolean isAlarm3CustomSound = false;
+    private Integer lastActiveSoundAlarm = null;
+    private MediaPlayer player = null;
+    private final HashSet<MediaPlayer> fadingAlarms = new HashSet<MediaPlayer>();
+    private final int FADE_DURATION = 2000;
 
     public static boolean isInstanceCreated() {
         return instance != null;
@@ -99,23 +112,30 @@ public class SpeechService extends Service implements TextToSpeech.OnInitListene
                             say(getString(R.string.speech_text_disconnected), "info");
                     break;
                 case Constants.ACTION_WHEEL_DATA_AVAILABLE:
-                    if (WheelData.getInstance().isVoltageAlarmActive())
+                    if (WheelData.getInstance().isVoltageAlarmActive()) {
+                        stopSoundAlarm(true);
                         say(getString(R.string.speech_text_voltage_too_high), "alarm", 5, true);
-                    else
-                    if (WheelData.getInstance().isPeakCurrentAlarmActive() || WheelData.getInstance().isSustainedCurrentAlarmActive())
+                    } else if (WheelData.getInstance().isPeakCurrentAlarmActive() || WheelData.getInstance().isSustainedCurrentAlarmActive()) {
+                        stopSoundAlarm(true);
                         say(getString(R.string.speech_text_current_too_high), "alarm", 5, true);
-                    else
-                    if (WheelData.getInstance().isTemperatureAlarmActive())
+                    } else if (WheelData.getInstance().isTemperatureAlarmActive()) {
+                        stopSoundAlarm(true);
                         say(getString(R.string.speech_text_temp_too_high), "alarm", 5, true);
-                    else
-                    if (WheelData.getInstance().isSpeedAlarm1Active())
+                    } else if (WheelData.getInstance().isSpeedAlarm1Active()) {
+                        if (isAlarm1CustomSound && startAudioFileAlarm(Constants.REQUEST_ALARM_FILE_1))
+                            return;
                         say(getString(R.string.speech_text_slow_down_3), "warning3", 4, true);
-                    else
-                    if (WheelData.getInstance().isSpeedAlarm2Active())
+                    } else if (WheelData.getInstance().isSpeedAlarm2Active()) {
+                        if (isAlarm2CustomSound && startAudioFileAlarm(Constants.REQUEST_ALARM_FILE_2))
+                            return;
                         say(getString(R.string.speech_text_slow_down_2), "warning2", 3, true);
-                    else
-                    if (WheelData.getInstance().isSpeedAlarm3Active())
+                    } else if (WheelData.getInstance().isSpeedAlarm3Active()) {
+                        if (isAlarm3CustomSound && startAudioFileAlarm(Constants.REQUEST_ALARM_FILE_3))
+                            return;
                         say(getString(R.string.speech_text_slow_down_1), "warning1", 2, true);
+                    } else if (lastActiveSoundAlarm != null) {
+                        stopSoundAlarm(true);
+                    }
                     break;
                 case Constants.ACTION_SPEECH_SAY:
                     int priority = intent.getIntExtra(Constants.INTENT_EXTRA_SPEECH_PRIORITY, 1);
@@ -132,9 +152,85 @@ public class SpeechService extends Service implements TextToSpeech.OnInitListene
                 case Constants.ACTION_REQUEST_VOICE_DISMISS:
                     say(" ", "", 2, true);
                     break;
+                case Constants.ACTION_PREFERENCE_CHANGED:
+                    checkShouldHandleAudioSpeedAlarms();
+                    break;
             }
         }
     };
+
+    private boolean startAudioFileAlarm(int alarmFileType) {
+        // Check if higher priority alarm is playing
+        if (lastActiveSoundAlarm != null && lastActiveSoundAlarm <= alarmFileType) return true;
+        stopSoundAlarm(true);
+        lastActiveSoundAlarm = alarmFileType;
+        String file = SettingsUtil.alarmFileConfigMap.get(alarmFileType).getPathName(this);
+        if (file == null || file.isEmpty()) return false;
+        player = new MediaPlayer();
+        player.setVolume(1f, 1f);
+        try {
+            player.setDataSource(file);
+            player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer mp) {
+                    if (!mp.isPlaying() && lastActiveSoundAlarm == alarmFileType)
+                        mp.start();
+                }
+            });
+            player.setLooping(true);
+            player.prepareAsync();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    private void stopSoundAlarm() {
+        stopSoundAlarm(false);
+    }
+
+    private void stopSoundAlarm(boolean fade) {
+        if (player != null) {
+            MediaPlayer currentPlayer = player;
+            player = null;
+            if (fadingAlarms.contains(currentPlayer)) return;
+            if (fade) {
+                fadingAlarms.add(currentPlayer);
+                final Timer fadeTimer = new Timer(false);
+                TimerTask timerTask = new TimerTask() {
+                    final long start = System.currentTimeMillis();
+                    final long end = start + FADE_DURATION;
+                    @Override
+                    public void run() {
+                        long current = System.currentTimeMillis();
+                        //Cancel and Purge the Timer if the desired volume has been reached
+                        if(current >= end){
+                            fadeTimer.cancel();
+                            fadeTimer.purge();
+                            stopPlayer(currentPlayer);
+                        } else {
+                            final float pct = (end - current) / (float) FADE_DURATION;
+                            // Fade out logarithmically
+                            final float vol = (float) ((Math.exp(pct) -1) / (Math.E - 1));
+                            currentPlayer.setVolume(vol, vol);
+                        }
+                    }
+                };
+                fadeTimer.schedule(timerTask, 0, 100);
+            } else {
+                stopPlayer(currentPlayer);
+            }
+        }
+    }
+
+    private void stopPlayer(MediaPlayer player) {
+        player.stop();
+        player.release();
+        if (fadingAlarms.contains(player))
+            fadingAlarms.remove(player);
+        lastActiveSoundAlarm = null;
+    }
 
     private final AudioManager.OnAudioFocusChangeListener afl = focusChange -> { };
 
@@ -148,6 +244,13 @@ public class SpeechService extends Service implements TextToSpeech.OnInitListene
         tts = new TextToSpeech(this, this);
         ttsMap = new HashMap<>();
         ttsMap.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "EucworldSpeech");
+        checkShouldHandleAudioSpeedAlarms();
+    }
+
+    private void checkShouldHandleAudioSpeedAlarms() {
+        isAlarm1CustomSound = SettingsUtil.alarmFileConfigMap.get(Constants.REQUEST_ALARM_FILE_1).getShouldPlay(this);
+        isAlarm2CustomSound = SettingsUtil.alarmFileConfigMap.get(Constants.REQUEST_ALARM_FILE_2).getShouldPlay(this);
+        isAlarm3CustomSound = SettingsUtil.alarmFileConfigMap.get(Constants.REQUEST_ALARM_FILE_3).getShouldPlay(this);
     }
 
     @Override
@@ -162,6 +265,7 @@ public class SpeechService extends Service implements TextToSpeech.OnInitListene
         intentFilter.addAction(Constants.ACTION_REQUEST_VOICE_DISMISS);
         intentFilter.addAction(Constants.ACTION_REQUEST_VOICE_REPORT);
         intentFilter.addAction(Constants.ACTION_SPEECH_SAY);
+        intentFilter.addAction(Constants.ACTION_PREFERENCE_CHANGED);
         registerReceiver(receiver, intentFilter);
         Intent serviceStartedIntent = new Intent(Constants.ACTION_SPEECH_SERVICE_TOGGLED).putExtra(Constants.INTENT_EXTRA_IS_RUNNING, true);
         sendBroadcast(serviceStartedIntent);
@@ -226,6 +330,7 @@ public class SpeechService extends Service implements TextToSpeech.OnInitListene
             tts.stop();
             tts.shutdown();
         }
+        stopSoundAlarm();
         Intent serviceStartedIntent = new Intent(Constants.ACTION_SPEECH_SERVICE_TOGGLED).putExtra(Constants.INTENT_EXTRA_IS_RUNNING, false);
         sendBroadcast(serviceStartedIntent);
         super.onDestroy();

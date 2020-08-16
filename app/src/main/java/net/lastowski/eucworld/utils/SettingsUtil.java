@@ -6,10 +6,61 @@ import androidx.preference.PreferenceManager;
 
 import net.lastowski.eucworld.R;
 
+import java.io.File;
+import java.util.HashMap;
+
 
 public class SettingsUtil {
 
     private static final String key = "Eucworld";
+
+    public static class AlarmFileConfig{
+        public int pathName;
+        public int titleName;
+        public int settingName;
+
+        public AlarmFileConfig(int pathName, int titleName, int settingName) {
+            this.pathName = pathName;
+            this.titleName = titleName;
+            this.settingName = settingName;
+        }
+
+        public String getPathName(Context context) {
+            SharedPreferences pref = getSharedPreferences(context);
+            return pref.getString(context.getString(this.pathName), null);
+        }
+
+        public String getTitleName(Context context) {
+            SharedPreferences pref = getSharedPreferences(context);
+            return pref.getString(context.getString(this.titleName), null);
+        }
+
+        public boolean getEnabled(Context context) {
+            SharedPreferences pref = getSharedPreferences(context);
+            return pref.getBoolean(context.getString(this.settingName), false);
+        }
+
+        public boolean getShouldPlay(Context context) {
+            if (!getEnabled(context)) return false;
+            final String file = getPathName(context);
+            if (file == null || file.isEmpty()) return false;
+            return new File(file).canRead();
+        }
+
+        public void setFile(Context context, String path, String title) {
+            SharedPreferences.Editor editor = getSharedPreferences(context).edit();
+            editor.putString(context.getString(this.pathName), path);
+            editor.putString(context.getString(this.titleName), title);
+            editor.apply();
+        }
+    }
+
+    public static HashMap<Integer, AlarmFileConfig> alarmFileConfigMap = new HashMap<Integer, AlarmFileConfig>(3);
+    static {
+        alarmFileConfigMap.put(Constants.REQUEST_ALARM_FILE_1, new AlarmFileConfig(R.string.alarm_1_file_path, R.string.alarm_1_file_title, R.string.audio_alarm_1_enabled));
+        alarmFileConfigMap.put(Constants.REQUEST_ALARM_FILE_2, new AlarmFileConfig(R.string.alarm_2_file_path, R.string.alarm_2_file_title, R.string.audio_alarm_2_enabled));
+        alarmFileConfigMap.put(Constants.REQUEST_ALARM_FILE_3, new AlarmFileConfig(R.string.alarm_3_file_path, R.string.alarm_3_file_title, R.string.audio_alarm_3_enabled));
+    }
 
     public static String getLastAddress(Context context) {
         SharedPreferences pref = context.getSharedPreferences(key, Context.MODE_PRIVATE);
@@ -329,6 +380,19 @@ public class SettingsUtil {
         editor.putString(context.getString(R.string.flic_custom_horn_sound_path), path);
         editor.putString(context.getString(R.string.flic_custom_horn_sound_title), title);
         editor.apply();
+    }
+
+    public static boolean isSoundAlarmsEnabled(Context context) {
+        for (AlarmFileConfig config : alarmFileConfigMap.values()) {
+            if (config.getEnabled(context)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void setAlarmCustomFile(Context context, int alarmType, String path, String title) {
+        alarmFileConfigMap.get(alarmType).setFile(context, path, title);
     }
 
     public static int getGaugeHornMode(Context context) {

@@ -124,6 +124,10 @@ public class Constants {
     public static final int REQUEST_WATCH_CUSTOM_HORN = 70;
     public static final int REQUEST_GAUGE_CUSTOM_HORN = 80;
 
+    public static final int REQUEST_ALARM_FILE_1 = 90;
+    public static final int REQUEST_ALARM_FILE_2 = 100;
+    public static final int REQUEST_ALARM_FILE_3 = 110;
+
     public enum WHEEL_TYPE {
         Unknown,
         KINGSONG,
@@ -182,7 +186,7 @@ public class Constants {
     }
 
     public static String getEucWorldUrl() {
-        return (android.os.Debug.isDebuggerConnected()) ? "https://dev.euc.world" : "https://euc.world";
+        return (android.os.Debug.isDebuggerConnected()) ? "https://euc.world" : "https://euc.world";
     }
 
     public static String appId(Context context) {
@@ -199,5 +203,7 @@ public class Constants {
         int id =  context.getResources().getIdentifier("flicsecret", "string", context.getPackageName());
         return (id > 0) ? context.getResources().getString(id) : "";
     }
+
+
 
 }
